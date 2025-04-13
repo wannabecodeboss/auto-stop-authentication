@@ -1,135 +1,204 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Auto Stop Toggle</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Autonomous Campus Shuttle</title>
+
+  <!-- Leaflet for OpenStreetMap -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <style>
     body {
       font-family: Arial, sans-serif;
       text-align: center;
-      padding: 40px;
-    }
-    #login-section, #toggle-section {
-      margin: 20px auto;
-      max-width: 400px;
+      background-color: #f4f4f4;
+      margin: 0;
       padding: 20px;
-      border: 1px solid #ccc;
+    }
+    .container {
+      background: white;
+      max-width: 400px;
+      margin: auto;
+      padding: 20px;
       border-radius: 10px;
+      box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
     }
-    input {
-      display: block;
-      margin: 10px auto;
-      padding: 10px;
-      width: 80%;
-    }
-    button {
-      padding: 10px 20px;
-      cursor: pointer;
-    }
-    #last-user {
-      margin-top: 20px;
+    h1 { color: #333; }
+    .status {
+      font-size: 1.2em;
       font-weight: bold;
+    }
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .toggle {
+      position: relative;
+      width: 50px;
+      height: 25px;
+    }
+    .toggle input {
+      display: none;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      border-radius: 25px;
+      transition: 0.4s;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 4px;
+      bottom: 3.5px;
+      background-color: white;
+      border-radius: 50%;
+      transition: 0.4s;
+    }
+    input:checked + .slider {
+      background-color: #4CAF50;
+    }
+    input:checked + .slider:before {
+      transform: translateX(24px);
+    }
+    #map {
+      width: 100%;
+      height: 300px;
+      margin-top: 20px;
+      border-radius: 10px;
     }
   </style>
 </head>
 <body>
+  <img src="gandhinagar-logo.png" alt="Gandhinagar Logo" class="logo" />
+  <div class="container">
+    <h1>Cart Control Panel</h1>
 
-  <h1>Auto Stop Toggle</h1>
+    <div class="toggle-container">
+      <p class="status">Current Status: <span id="ledStatus">Loading...</span></p>
+      <label class="toggle">
+        <input type="checkbox" id="ledToggle" />
+        <span class="slider"></span>
+      </label>
+    </div>
 
-  <div id="login-section">
-    <h2>Login</h2>
-    <form id="login-form">
-      <input type="email" id="email" placeholder="Email" required />
-      <input type="password" id="password" placeholder="Password" required />
-      <button type="submit">Login</button>
-    </form>
-    <p id="login-error" style="color:red;"></p>
+    <p class="status" id="lastUser">Last toggled by: Loading...</p>
+    <p class="status">Latest Location: <span id="location">Fetching...</span></p>
+    <div id="map"></div>
+    <img src="golf-cart.png" alt="Golf Cart" class="golf-cart" />
   </div>
 
-  <div id="toggle-section" style="display:none;">
-    <h2>Welcome, <span id="user-email"></span></h2>
-    <button id="toggle-button">Toggle</button>
-    <p id="last-user">Last toggled by: N/A</p>
-    <button id="logout-button">Logout</button>
-  </div>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+    import {
+      getDatabase, ref, onValue, set, query, limitToLast, orderByKey
+    } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-database.js";
+    import {
+      getAuth, signInWithEmailAndPassword, onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-database-compat.js"></script>
+    // 🔁 Replace this with your Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyCmZ0RxOxZiPv5hFvpA4VKIkbD0fJf2c4o",
+      authDomain: "auto-hiteshi.firebaseapp.com",
+      databaseURL: "https://auto-hiteshi-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "auto-hiteshi",
+      storageBucket: "auto-hiteshi.firebasestorage.app",
+      messagingSenderId: "471315722697",
+      appId: "1:471315722697:web:d20bc051c4e9a13037b818"
+    };
 
-  <script>
-    // TODO: Replace with your Firebase project config
-   const firebaseConfig = {
-    apiKey: "AIzaSyCmZ0RxOxZiPv5hFvpA4VKIkbD0fJf2c4o",
-    authDomain: "auto-hiteshi.firebaseapp.com",
-    databaseURL: "https://auto-hiteshi-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "auto-hiteshi",
-    storageBucket: "auto-hiteshi.firebasestorage.app",
-    messagingSenderId: "471315722697",
-    appId: "1:471315722697:web:d20bc051c4e9a13037b818"
-  };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const auth = getAuth(app);
 
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const database = firebase.database();
+    const ledStatusRef = ref(db, "LED_Status");
+    const lastUserRef = ref(db, "LED_LastUser");
 
-    const loginSection = document.getElementById('login-section');
-    const toggleSection = document.getElementById('toggle-section');
-    const loginForm = document.getElementById('login-form');
-    const emailInput = document.getElementById('email');
-    const passwordInput = document.getElementById('password');
-    const loginError = document.getElementById('login-error');
-    const userEmailSpan = document.getElementById('user-email');
-    const lastUserText = document.getElementById('last-user');
-    const toggleButton = document.getElementById('toggle-button');
-    const logoutButton = document.getElementById('logout-button');
+    // Update toggle and status on load
+    onValue(ledStatusRef, (snapshot) => {
+      const status = snapshot.exists() ? snapshot.val() : "OFF";
+      document.getElementById("ledStatus").innerText = status;
+      document.getElementById("ledToggle").checked = status === "ON";
+    });
 
-    auth.onAuthStateChanged((user) => {
+    // Show last user who toggled
+    onValue(lastUserRef, (snapshot) => {
+      const user = snapshot.val();
       if (user) {
-        loginSection.style.display = 'none';
-        toggleSection.style.display = 'block';
-        userEmailSpan.textContent = user.email;
-
-        // Listen to toggle updates
-        database.ref('toggle/lastToggledBy').on('value', (snapshot) => {
-          const lastUser = snapshot.val();
-          lastUserText.textContent = `Last toggled by: ${lastUser || 'N/A'}`;
-        });
-      } else {
-        loginSection.style.display = 'block';
-        toggleSection.style.display = 'none';
+        document.getElementById("lastUser").innerText = `Last toggled by: ${user}`;
       }
     });
 
-    loginForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const email = emailInput.value;
-      const password = passwordInput.value;
-      auth.signInWithEmailAndPassword(email, password)
-        .then(() => {
-          loginError.textContent = '';
-          emailInput.value = '';
-          passwordInput.value = '';
-        })
-        .catch((error) => {
-          loginError.textContent = error.message;
-        });
-    });
-
-    toggleButton.addEventListener('click', () => {
+    // Handle toggle switch
+    document.getElementById("ledToggle").addEventListener("change", (event) => {
       const user = auth.currentUser;
       if (user) {
-        database.ref('toggle').set({
-          lastToggledBy: user.email,
-          timestamp: firebase.database.ServerValue.TIMESTAMP
-        });
+        const newStatus = event.target.checked ? "ON" : "OFF";
+        set(ledStatusRef, newStatus);
+        set(lastUserRef, user.email);
+      } else {
+        alert("Please log in first.");
+        event.preventDefault();
       }
     });
 
-    logoutButton.addEventListener('click', () => {
-      auth.signOut();
+    // Show GPS location
+    const locationRef = query(ref(db, "location/user1"), orderByKey(), limitToLast(1));
+    onValue(locationRef, (snapshot) => {
+      if (snapshot.exists()) {
+        snapshot.forEach((child) => {
+          const data = child.val();
+          if (data.lat && data.lon) {
+            document.getElementById("location").innerText = `Lat: ${data.lat}, Lon: ${data.lon}`;
+            updateMap(parseFloat(data.lat), parseFloat(data.lon));
+          }
+        });
+      } else {
+        document.getElementById("location").innerText = "No Data";
+      }
     });
+
+    // Leaflet map
+    let map;
+    function updateMap(lat, lon) {
+      if (!map) {
+        map = L.map('map').setView([lat, lon], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+      }
+      map.eachLayer(layer => {
+        if (layer instanceof L.Marker) {
+          map.removeLayer(layer);
+        }
+      });
+      L.marker([lat, lon]).addTo(map).bindPopup("Live Location").openPopup();
+    }
+
+    // Quick login prompt (replace with proper form later if needed)
+    window.onload = () => {
+      const email = prompt("Enter your email:");
+      const password = prompt("Enter your password:");
+      signInWithEmailAndPassword(auth, email, password)
+        .then(() => {
+          console.log("Login successful");
+        })
+        .catch((error) => {
+          alert("Login failed: " + error.message);
+        });
+    };
   </script>
 </body>
 </html>
