@@ -27,14 +27,16 @@
     }
     h1 { color: #333; }
     .status {
-      font-size: 1.2em;
+      font-size: 1.1em;
       font-weight: bold;
+      margin: 10px 0;
     }
     .toggle-container {
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 10px;
+      margin-bottom: 10px;
     }
     .toggle {
       position: relative;
@@ -78,25 +80,60 @@
       margin-top: 20px;
       border-radius: 10px;
     }
+    #login-form input {
+      padding: 10px;
+      width: 80%;
+      margin: 5px auto;
+      display: block;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    #login-form button {
+      padding: 10px 20px;
+      margin-top: 10px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #logout-button {
+      margin-top: 10px;
+      background-color: #f44336;
+    }
+    .hidden {
+      display: none;
+    }
   </style>
 </head>
 <body>
   <img src="gandhinagar-logo.png" alt="Gandhinagar Logo" class="logo" />
+
   <div class="container">
     <h1>Cart Control Panel</h1>
 
-    <div class="toggle-container">
-      <p class="status">Current Status: <span id="ledStatus">Loading...</span></p>
-      <label class="toggle">
-        <input type="checkbox" id="ledToggle" />
-        <span class="slider"></span>
-      </label>
+    <div id="login-section">
+      <form id="login-form">
+        <input type="email" id="email" placeholder="Email" required />
+        <input type="password" id="password" placeholder="Password" required />
+        <button type="submit">Login</button>
+        <p id="login-error" style="color:red;"></p>
+      </form>
     </div>
 
-    <p class="status" id="lastUser">Last toggled by: Loading...</p>
-    <p class="status">Latest Location: <span id="location">Fetching...</span></p>
-    <div id="map"></div>
-    <img src="golf-cart.png" alt="Golf Cart" class="golf-cart" />
+    <div id="control-section" class="hidden">
+      <div class="toggle-container">
+        <p class="status">Current Status: <span id="ledStatus">Loading...</span></p>
+        <label class="toggle">
+          <input type="checkbox" id="ledToggle" />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <p class="status" id="lastUser">Last toggled by: Loading...</p>
+      <p class="status">Latest Location: <span id="location">Fetching...</span></p>
+      <div id="map"></div>
+      <button id="logout-button">Logout</button>
+    </div>
   </div>
 
   <script type="module">
@@ -105,18 +142,14 @@
       getDatabase, ref, onValue, set, query, limitToLast, orderByKey
     } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-database.js";
     import {
-      getAuth, signInWithEmailAndPassword, onAuthStateChanged
+      getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
     } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 
-    // 🔁 Replace this with your Firebase config
+    // 🔁 Replace with your actual Firebase config
     const firebaseConfig = {
-      apiKey: "AIzaSyCmZ0RxOxZiPv5hFvpA4VKIkbD0fJf2c4o",
-      authDomain: "auto-hiteshi.firebaseapp.com",
-      databaseURL: "https://auto-hiteshi-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "auto-hiteshi",
-      storageBucket: "auto-hiteshi.firebasestorage.app",
-      messagingSenderId: "471315722697",
-      appId: "1:471315722697:web:d20bc051c4e9a13037b818"
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_AUTH_DOMAIN",
+      databaseURL: "https://auto-hiteshi-default-rtdb.asia-southeast1.firebasedatabase.app/"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -126,51 +159,79 @@
     const ledStatusRef = ref(db, "LED_Status");
     const lastUserRef = ref(db, "LED_LastUser");
 
-    // Update toggle and status on load
-    onValue(ledStatusRef, (snapshot) => {
-      const status = snapshot.exists() ? snapshot.val() : "OFF";
-      document.getElementById("ledStatus").innerText = status;
-      document.getElementById("ledToggle").checked = status === "ON";
+    const loginForm = document.getElementById("login-form");
+    const emailInput = document.getElementById("email");
+    const passwordInput = document.getElementById("password");
+    const loginError = document.getElementById("login-error");
+    const loginSection = document.getElementById("login-section");
+    const controlSection = document.getElementById("control-section");
+    const toggle = document.getElementById("ledToggle");
+    const statusText = document.getElementById("ledStatus");
+    const lastUserText = document.getElementById("lastUser");
+
+    loginForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const email = emailInput.value;
+      const password = passwordInput.value;
+
+      signInWithEmailAndPassword(auth, email, password)
+        .then(() => {
+          loginError.textContent = "";
+        })
+        .catch((error) => {
+          loginError.textContent = error.message;
+        });
     });
 
-    // Show last user who toggled
-    onValue(lastUserRef, (snapshot) => {
-      const user = snapshot.val();
+    document.getElementById("logout-button").addEventListener("click", () => {
+      signOut(auth);
+    });
+
+    // Firebase Auth state
+    onAuthStateChanged(auth, (user) => {
       if (user) {
-        document.getElementById("lastUser").innerText = `Last toggled by: ${user}`;
-      }
-    });
+        loginSection.classList.add("hidden");
+        controlSection.classList.remove("hidden");
 
-    // Handle toggle switch
-    document.getElementById("ledToggle").addEventListener("change", (event) => {
-      const user = auth.currentUser;
-      if (user) {
-        const newStatus = event.target.checked ? "ON" : "OFF";
-        set(ledStatusRef, newStatus);
-        set(lastUserRef, user.email);
-      } else {
-        alert("Please log in first.");
-        event.preventDefault();
-      }
-    });
+        // Toggle control
+        onValue(ledStatusRef, (snapshot) => {
+          const status = snapshot.val();
+          statusText.textContent = status ?? "OFF";
+          toggle.checked = status === "ON";
+        });
 
-    // Show GPS location
-    const locationRef = query(ref(db, "location/user1"), orderByKey(), limitToLast(1));
-    onValue(locationRef, (snapshot) => {
-      if (snapshot.exists()) {
-        snapshot.forEach((child) => {
-          const data = child.val();
-          if (data.lat && data.lon) {
-            document.getElementById("location").innerText = `Lat: ${data.lat}, Lon: ${data.lon}`;
-            updateMap(parseFloat(data.lat), parseFloat(data.lon));
+        onValue(lastUserRef, (snapshot) => {
+          lastUserText.textContent = `Last toggled by: ${snapshot.val() ?? "Unknown"}`;
+        });
+
+        toggle.addEventListener("change", () => {
+          const newStatus = toggle.checked ? "ON" : "OFF";
+          set(ledStatusRef, newStatus);
+          set(lastUserRef, user.email);
+        });
+
+        // GPS Location
+        const locationRef = query(ref(db, "location/user1"), orderByKey(), limitToLast(1));
+        onValue(locationRef, (snapshot) => {
+          if (snapshot.exists()) {
+            snapshot.forEach((child) => {
+              const data = child.val();
+              if (data.lat && data.lon) {
+                document.getElementById("location").textContent = `Lat: ${data.lat}, Lon: ${data.lon}`;
+                updateMap(parseFloat(data.lat), parseFloat(data.lon));
+              }
+            });
+          } else {
+            document.getElementById("location").textContent = "No Data";
           }
         });
+
       } else {
-        document.getElementById("location").innerText = "No Data";
+        loginSection.classList.remove("hidden");
+        controlSection.classList.add("hidden");
       }
     });
 
-    // Leaflet map
     let map;
     function updateMap(lat, lon) {
       if (!map) {
@@ -179,26 +240,13 @@
           attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
       }
+
       map.eachLayer(layer => {
-        if (layer instanceof L.Marker) {
-          map.removeLayer(layer);
-        }
+        if (layer instanceof L.Marker) map.removeLayer(layer);
       });
+
       L.marker([lat, lon]).addTo(map).bindPopup("Live Location").openPopup();
     }
-
-    // Quick login prompt (replace with proper form later if needed)
-    window.onload = () => {
-      const email = prompt("Enter your email:");
-      const password = prompt("Enter your password:");
-      signInWithEmailAndPassword(auth, email, password)
-        .then(() => {
-          console.log("Login successful");
-        })
-        .catch((error) => {
-          alert("Login failed: " + error.message);
-        });
-    };
   </script>
 </body>
 </html>
