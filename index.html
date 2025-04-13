@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Auto Stop Toggle</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 40px;
+    }
+    #login-section, #toggle-section {
+      margin: 20px auto;
+      max-width: 400px;
+      padding: 20px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+    }
+    input {
+      display: block;
+      margin: 10px auto;
+      padding: 10px;
+      width: 80%;
+    }
+    button {
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+    #last-user {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Auto Stop Toggle</h1>
+
+  <div id="login-section">
+    <h2>Login</h2>
+    <form id="login-form">
+      <input type="email" id="email" placeholder="Email" required />
+      <input type="password" id="password" placeholder="Password" required />
+      <button type="submit">Login</button>
+    </form>
+    <p id="login-error" style="color:red;"></p>
+  </div>
+
+  <div id="toggle-section" style="display:none;">
+    <h2>Welcome, <span id="user-email"></span></h2>
+    <button id="toggle-button">Toggle</button>
+    <p id="last-user">Last toggled by: N/A</p>
+    <button id="logout-button">Logout</button>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-database-compat.js"></script>
+
+  <script>
+    // TODO: Replace with your Firebase project config
+   const firebaseConfig = {
+    apiKey: "AIzaSyCmZ0RxOxZiPv5hFvpA4VKIkbD0fJf2c4o",
+    authDomain: "auto-hiteshi.firebaseapp.com",
+    databaseURL: "https://auto-hiteshi-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "auto-hiteshi",
+    storageBucket: "auto-hiteshi.firebasestorage.app",
+    messagingSenderId: "471315722697",
+    appId: "1:471315722697:web:d20bc051c4e9a13037b818"
+  };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const database = firebase.database();
+
+    const loginSection = document.getElementById('login-section');
+    const toggleSection = document.getElementById('toggle-section');
+    const loginForm = document.getElementById('login-form');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const loginError = document.getElementById('login-error');
+    const userEmailSpan = document.getElementById('user-email');
+    const lastUserText = document.getElementById('last-user');
+    const toggleButton = document.getElementById('toggle-button');
+    const logoutButton = document.getElementById('logout-button');
+
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        loginSection.style.display = 'none';
+        toggleSection.style.display = 'block';
+        userEmailSpan.textContent = user.email;
+
+        // Listen to toggle updates
+        database.ref('toggle/lastToggledBy').on('value', (snapshot) => {
+          const lastUser = snapshot.val();
+          lastUserText.textContent = `Last toggled by: ${lastUser || 'N/A'}`;
+        });
+      } else {
+        loginSection.style.display = 'block';
+        toggleSection.style.display = 'none';
+      }
+    });
+
+    loginForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const email = emailInput.value;
+      const password = passwordInput.value;
+      auth.signInWithEmailAndPassword(email, password)
+        .then(() => {
+          loginError.textContent = '';
+          emailInput.value = '';
+          passwordInput.value = '';
+        })
+        .catch((error) => {
+          loginError.textContent = error.message;
+        });
+    });
+
+    toggleButton.addEventListener('click', () => {
+      const user = auth.currentUser;
+      if (user) {
+        database.ref('toggle').set({
+          lastToggledBy: user.email,
+          timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+      }
+    });
+
+    logoutButton.addEventListener('click', () => {
+      auth.signOut();
+    });
+  </script>
+</body>
+</html>
